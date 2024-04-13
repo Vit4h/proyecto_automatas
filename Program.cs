@@ -1,8 +1,10 @@
-﻿using System;
+﻿using Newtonsoft.Json.Linq;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text;
+using System.Text.Json;
 using System.Threading.Tasks;
 
 namespace LFA_PROYECTO1
@@ -59,7 +61,10 @@ namespace LFA_PROYECTO1
                 automata = ReadTxtFile(filePath);
                 break;
             case ".csv":
-                automata = ReadCsvFile(filePath); // Esta es la nueva integración
+                automata = ReadCsvFile(filePath); 
+                break;
+            case ".json":
+                automata = ReadJsonFile(filePath); 
                 break;
                 default:
                 Console.WriteLine("Formato de archivo no soportado.");
@@ -125,7 +130,54 @@ namespace LFA_PROYECTO1
 
             return automata;
         }
+        static Automata ReadJsonFile(string filePath)
+        {
+            var jsonString = File.ReadAllText(filePath);
+            var jsonObject = JObject.Parse(jsonString);
+
+            var automata = new Automata
+            {
+                NumberOfStates = (int)jsonObject["no_estados"],
+                InitialState = (int)jsonObject["estados_inicial"]
+            };
+
+            foreach (var finalState in jsonObject["estado_final"])
+            {
+                automata.FinalStates.Add((int)finalState);
+            }
+
+            foreach (var element in jsonObject["transiciones"])
+            {
+                int initialState = (int)element[0];
+                string readString = (string)element[1];
+                if (readString.Equals("e", StringComparison.OrdinalIgnoreCase))
+                {
+                    readString = "";
+                }
+
+                int? state = (string)element[2] == "e" ? (int?)null : (int)element[2];
+
+                automata.AddTransition(initialState, readString, state);
+            }
+
+            return automata;
+        }
+
+        // Asumiendo que estás utilizando Newtonsoft.Json u otro analizador compatible
+        static int ParseInt(JsonElement element)
+        {
+            // Verificar si el elemento es de tipo número o string que contiene un número
+            if (element.ValueKind == JsonValueKind.String)
+            {
+                // Intentar convertir la cadena a entero
+                return int.Parse(element.GetString());
+            }
+            else if (element.ValueKind == JsonValueKind.Number)
+            {
+                // Obtener directamente el número
+                return element.GetInt32();
+            }
+            throw new InvalidOperationException("El elemento JSON no contiene un valor numérico válido.");
+        }
     }
 }
-//@"C:\Users\driva\Desktop\automata.txt"
-
