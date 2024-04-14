@@ -1,0 +1,13 @@
+{
+    "no_estados": "4",
+    "estados_inicial": "0",
+    "estado_final": ["4"],
+    "transiciones": [
+        [0, "b", 1],
+        [1, "a", 0],
+        [1, "a", 1],
+        [1, "c", 1],
+        [1, "b", 3],
+        [3, "c", 4]
+    ]
+}
