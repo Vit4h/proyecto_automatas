@@ -24,64 +24,89 @@ namespace LFA_PROYECTO1
         {
             Transitions.Add(new Tuple<int, string, int?>(initialState, readString, state));
         }
-
-        // Método para determinar si una cadena es aceptada por el autómata
         public bool IsAccepted(string input)
         {
             int currentState = InitialState;
+            Console.WriteLine($"Iniciando en el estado: {currentState}");
             foreach (char c in input)
             {
                 string currentInput = c.ToString();
                 var transition = Transitions.FirstOrDefault(t => t.Item1 == currentState && t.Item2 == currentInput);
-                if (transition == null) // No se encontró una transición válida para el símbolo actual
+                if (transition == null)
                 {
+                    Console.WriteLine($"No hay transición válida desde el estado {currentState} con el símbolo '{c}'. Cadena no aceptada.");
                     return false;
                 }
+                Console.WriteLine($"Transición desde el estado {currentState} a {transition.Item3} con '{c}'");
                 currentState = transition.Item3.HasValue ? transition.Item3.Value : currentState; // Manejo de transiciones epsilon
             }
-            // Verificar si el estado actual después de procesar la cadena completa es un estado final
-            return FinalStates.Contains(currentState);
+
+            Console.WriteLine($"Cadena completa procesada. Estado final: {currentState}");
+            bool isFinalStateAccepted = FinalStates.Contains(currentState);
+            //Console.WriteLine($"La cadena es {(isFinalStateAccepted ? "aceptada" : "no aceptada")}.");
+            return isFinalStateAccepted;
         }
+
     }
 
     class Program
     {
-        //C:\Users\driva\Desktop\files_example\automata.txt
-        //C:\Users\driva\Desktop\files_example\automata.csv
-        //C:\Users\driva\Desktop\files_example\automata.JSON
         static void Main(string[] args)
         {
-            Console.Write("Ingrese la ruta del archivo: ");
-            string filePath = Console.ReadLine();
-            //string filePath = @"C:\Users\driva\Desktop\files_example\automata.txt";
-            Automata automata = null;
-            switch(Path.GetExtension(filePath).ToLower())
-        {
-            case ".txt":
-                automata = ReadTxtFile(filePath);
-                break;
-            case ".csv":
-                automata = ReadCsvFile(filePath); 
-                break;
-            case ".json":
-                automata = ReadJsonFile(filePath); 
-                break;
-                default:
-                Console.WriteLine("Formato de archivo no soportado.");
-                return;
+            bool continueProcessing = true;
+            string filePath = "";
+
+            while (continueProcessing)
+            {
+                if (string.IsNullOrEmpty(filePath))
+                {
+                    Console.Write("Ingrese la ruta del archivo: ");
+                    filePath = Console.ReadLine();
+                }
+
+                Automata automata = LoadAutomata(filePath);
+                if (automata == null)
+                {
+                    Console.WriteLine("No se pudo cargar el autómata. Verifique la ruta del archivo y el formato.");
+                    continue;
+                }
+
+                Console.Write("Ingrese una cadena para verificar si es aceptada por el autómata: ");
+                string userInput = Console.ReadLine();
+                bool isAccepted = automata.IsAccepted(userInput);
+                Console.ForegroundColor = ConsoleColor.Red;
+                Console.WriteLine($"La cadena es {(isAccepted ? "aceptada" : "no aceptada")} por el autómata.");
+                Console.ForegroundColor = ConsoleColor.White;
+
+                Console.Write("¿Desea ingresar otra cadena (si/no)? ");
+                if (Console.ReadLine().Trim().ToLower() != "si")
+                {
+                    continueProcessing = false;
+                    continue;
+                }
+
+                Console.Write("¿Desea cambiar la ruta del archivo (si/no)? ");
+                if (Console.ReadLine().Trim().ToLower() == "si")
+                {
+                    filePath = ""; 
+                }
             }
-
-            // Solicitar al usuario que ingrese una cadena
-            Console.Write("Ingrese una cadena para verificar si es aceptada por el autómata: ");
-            string userInput = Console.ReadLine();
-
-            // Verificar si la cadena es aceptada por el autómata
-            bool isAccepted = automata.IsAccepted(userInput);
-            Console.WriteLine($"La cadena es {(isAccepted ? "aceptada" : "no aceptada")} por el autómata.");
-
-            Console.ReadKey();
         }
-
+        static Automata LoadAutomata(string filePath)
+        {
+            switch (Path.GetExtension(filePath).ToLower())
+            {
+                case ".txt":
+                    return ReadTxtFile(filePath);
+                case ".csv":
+                    return ReadCsvFile(filePath);
+                case ".json":
+                    return ReadJsonFile(filePath);
+                default:
+                    Console.WriteLine("Formato de archivo no soportado.");
+                    return null;
+            }
+        }
         static Automata ReadTxtFile(string filePath)
         {
             Automata automata = new Automata();
@@ -104,7 +129,6 @@ namespace LFA_PROYECTO1
 
                 automata.AddTransition(initialState, readString, state);
             }
-
             return automata;
         }
         static Automata ReadCsvFile(string filePath)
@@ -127,7 +151,6 @@ namespace LFA_PROYECTO1
 
                 automata.AddTransition(initialState, readString, state);
             }
-
             return automata;
         }
         static Automata ReadJsonFile(string filePath)
@@ -159,25 +182,7 @@ namespace LFA_PROYECTO1
 
                 automata.AddTransition(initialState, readString, state);
             }
-
             return automata;
-        }
-
-        // Asumiendo que estás utilizando Newtonsoft.Json u otro analizador compatible
-        static int ParseInt(JsonElement element)
-        {
-            // Verificar si el elemento es de tipo número o string que contiene un número
-            if (element.ValueKind == JsonValueKind.String)
-            {
-                // Intentar convertir la cadena a entero
-                return int.Parse(element.GetString());
-            }
-            else if (element.ValueKind == JsonValueKind.Number)
-            {
-                // Obtener directamente el número
-                return element.GetInt32();
-            }
-            throw new InvalidOperationException("El elemento JSON no contiene un valor numérico válido.");
         }
     }
 }
