@@ -1,54 +1,92 @@
-﻿using Newtonsoft.Json.Linq;
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text;
-using System.Text.Json;
 using System.Threading.Tasks;
+using System.Xml.Linq;
+using Newtonsoft.Json.Linq;
 
-namespace LFA_PROYECTO1
+namespace LFA_Proyecto2_AutomataNoDeterminista_
 {
     class Automata
     {
         public int NumberOfStates { get; set; }
         public int InitialState { get; set; }
         public List<int> FinalStates { get; set; } = new List<int>();
-        public List<Tuple<int, string, int?>> Transitions { get; set; } = new List<Tuple<int, string, int?>>();
+        // Diccionario para manejar múltiples transiciones para cada par de estado y entrada.
+        public Dictionary<Tuple<int, string>, List<int>> Transitions { get; set; } = new Dictionary<Tuple<int, string>, List<int>>();
 
-        public Automata()
+        public void AddTransition(int initialState, string readString, List<int> states)
         {
-        }
-
-        public void AddTransition(int initialState, string readString, int? state)
-        {
-            Transitions.Add(new Tuple<int, string, int?>(initialState, readString, state));
-        }
-        public bool IsAccepted(string input)
-        {
-            int currentState = InitialState;
-            Console.WriteLine($"Iniciando en el estado: {currentState}");
-            foreach (char c in input)
+            var key = new Tuple<int, string>(initialState, readString);
+            if (Transitions.ContainsKey(key))
             {
-                string currentInput = c.ToString();
-                var transition = Transitions.FirstOrDefault(t => t.Item1 == currentState && t.Item2 == currentInput);
-                if (transition == null)
+                Transitions[key].AddRange(states);
+            }
+            else
+            {
+                Transitions[key] = new List<int>(states);
+            }
+        }
+
+        public List<int> GetTransitions(int state, string symbol)
+        {
+            var key = new Tuple<int, string>(state, symbol);
+            return Transitions.ContainsKey(key) ? Transitions[key] : new List<int>();
+        }
+
+        public List<int> EpsilonClosure(List<int> states)
+        {
+            var closure = new HashSet<int>(states);
+            var stack = new Stack<int>(states);
+
+            while (stack.Count > 0)
+            {
+                int currentState = stack.Pop();
+                var epsilonTransitions = GetTransitions(currentState, ""); // "" representa una transición epsilon.
+
+                foreach (int nextState in epsilonTransitions)
                 {
-                    Console.WriteLine($"No hay transición válida desde el estado {currentState} con el símbolo '{c}'. Cadena no aceptada.");
-                    return false;
+                    if (!closure.Contains(nextState))
+                    {
+                        closure.Add(nextState);
+                        stack.Push(nextState);
+                    }
                 }
-                Console.WriteLine($"Transición desde el estado {currentState} a {transition.Item3} con '{c}'");
-                currentState = transition.Item3.HasValue ? transition.Item3.Value : currentState; // Manejo de transiciones epsilon
             }
 
-            Console.WriteLine($"Cadena completa procesada. Estado final: {currentState}");
-            bool isFinalStateAccepted = FinalStates.Contains(currentState);
-            //Console.WriteLine($"La cadena es {(isFinalStateAccepted ? "aceptada" : "no aceptada")}.");
-            return isFinalStateAccepted;
+            return closure.ToList();
         }
 
-    }
+        public bool IsAccepted(string input)
+        {
+            var currentStates = EpsilonClosure(new List<int> { InitialState });
+            Console.WriteLine($"Iniciando en los estados: {string.Join(", ", currentStates)}");
 
+            foreach (char c in input)
+            {
+                var newStates = new List<int>();
+                string currentInput = c.ToString();
+                foreach (int currentState in currentStates)
+                {
+                    newStates.AddRange(GetTransitions(currentState, currentInput));
+                }
+
+                if (!newStates.Any())
+                {
+                    Console.WriteLine($"No hay transición válida con el símbolo '{c}'. Cadena no aceptada.");
+                    return false;
+                }
+
+                currentStates = EpsilonClosure(newStates.Distinct().ToList());
+                Console.WriteLine($"Transición con '{c}' a los estados {string.Join(", ", currentStates)}");
+            }
+
+            Console.WriteLine($"Cadena completa procesada. Estados finales: {string.Join(", ", currentStates)}");
+            return currentStates.Any(s => FinalStates.Contains(s));
+        }
+    }
     class Program
     {
         static void Main(string[] args)
@@ -88,10 +126,11 @@ namespace LFA_PROYECTO1
                 Console.Write("¿Desea cambiar la ruta del archivo (si/no)? ");
                 if (Console.ReadLine().Trim().ToLower() == "si")
                 {
-                    filePath = ""; 
+                    filePath = "";
                 }
             }
         }
+
         static Automata LoadAutomata(string filePath)
         {
             switch (Path.GetExtension(filePath).ToLower())
@@ -107,10 +146,10 @@ namespace LFA_PROYECTO1
                     return null;
             }
         }
+
         static Automata ReadTxtFile(string filePath)
         {
             Automata automata = new Automata();
-
             string[] lines = File.ReadAllLines(filePath);
             automata.NumberOfStates = int.Parse(lines[0].Trim());
             automata.InitialState = int.Parse(lines[1].Trim());
@@ -125,12 +164,13 @@ namespace LFA_PROYECTO1
                 string[] parts = lines[i].Split(',');
                 int initialState = int.Parse(parts[0].Trim());
                 string readString = parts[1].Trim();
-                int? state = parts[2].Trim().Equals("e", StringComparison.OrdinalIgnoreCase) ? null : (int?)int.Parse(parts[2].Trim());
+                List<int> states = parts[2].Trim().Split('|').Select(x => x.Equals("e", StringComparison.OrdinalIgnoreCase) ? (int?)null : int.Parse(x.Trim())).Where(x => x.HasValue).Select(x => x.Value).ToList();
 
-                automata.AddTransition(initialState, readString, state);
+                automata.AddTransition(initialState, readString, states);
             }
             return automata;
         }
+
         static Automata ReadCsvFile(string filePath)
         {
             Automata automata = new Automata();
@@ -146,13 +186,14 @@ namespace LFA_PROYECTO1
                 string[] parts = lines[i].Replace("\"", "").Split(',')
                                      .Select(part => part.Trim()).ToArray();
                 int initialState = int.Parse(parts[0]);
-                string readString = parts[1].Equals("e", StringComparison.OrdinalIgnoreCase) ? "" : parts[1];
-                int? state = parts[2].Equals("e", StringComparison.OrdinalIgnoreCase) ? null : (int?)int.Parse(parts[2]);
+                string readString = parts[1];
+                List<int> states = parts[2].Split('|').Select(x => x.Equals("e", StringComparison.OrdinalIgnoreCase) ? (int?)null : int.Parse(x.Trim())).Where(x => x.HasValue).Select(x => x.Value).ToList();
 
-                automata.AddTransition(initialState, readString, state);
+                automata.AddTransition(initialState, readString, states);
             }
             return automata;
         }
+
         static Automata ReadJsonFile(string filePath)
         {
             var jsonString = File.ReadAllText(filePath);
@@ -161,10 +202,10 @@ namespace LFA_PROYECTO1
             var automata = new Automata
             {
                 NumberOfStates = (int)jsonObject["no_estados"],
-                InitialState = (int)jsonObject["estados_inicial"]
+                InitialState = (int)jsonObject["estado_inicial"]
             };
 
-            foreach (var finalState in jsonObject["estado_final"])
+            foreach (var finalState in jsonObject["estados_finales"])
             {
                 automata.FinalStates.Add((int)finalState);
             }
@@ -173,14 +214,9 @@ namespace LFA_PROYECTO1
             {
                 int initialState = (int)element[0];
                 string readString = (string)element[1];
-                if (readString.Equals("e", StringComparison.OrdinalIgnoreCase))
-                {
-                    readString = "";
-                }
+                List<int> states = ((JArray)element[2]).Select(x => x.ToString().Equals("e", StringComparison.OrdinalIgnoreCase) ? (int?)null : (int)x).Where(x => x.HasValue).Select(x => x.Value).ToList();
 
-                int? state = (string)element[2] == "e" ? (int?)null : (int)element[2];
-
-                automata.AddTransition(initialState, readString, state);
+                automata.AddTransition(initialState, readString, states);
             }
             return automata;
         }
